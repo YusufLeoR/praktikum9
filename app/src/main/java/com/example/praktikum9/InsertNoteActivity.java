@@ -1,7 +1,10 @@
 package com.example.praktikum9;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import android.content.Intent;
 import android.os.Bundle;
@@ -16,21 +19,29 @@ import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.ChildEventListener;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 
-public class InsertNoteActivity extends AppCompatActivity implements View.OnClickListener {
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
-    private TextView tvEmail;
-    private TextView tvUid;
-    private Button btnKeluar;
+public class InsertNoteActivity extends AppCompatActivity implements View.OnClickListener, NoteAdapter.OnNoteDeleteListener, NoteAdapter.OnNoteUpdateListener {
+
+    private TextView tvEmail, tvUid;
+    private Button btnKeluar, btnSubmit;
     private FirebaseAuth mAuth;
-    private EditText etTitle;
-    private EditText etDesc;
-    private Button btnSubmit;
+    private EditText etTitle, etDesc;
     private FirebaseDatabase firebaseDatabase;
     private DatabaseReference databaseReference;
     private Note note;
+
+    private RecyclerView recyclerView;
+    private NoteAdapter noteAdapter;
+    private List<Note> noteList;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,6 +64,83 @@ public class InsertNoteActivity extends AppCompatActivity implements View.OnClic
         note = new Note();
         btnSubmit.setOnClickListener(this);
 
+        recyclerView = findViewById(R.id.rv_note);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+
+        noteList = new ArrayList<>();
+
+        noteAdapter = new NoteAdapter(noteList, this, this);
+        recyclerView.setAdapter(noteAdapter);
+
+        retrieveNotesFromFirebase();
+
+    }
+    private void deleteData(Note note) {
+        String userId = mAuth.getCurrentUser().getUid();
+        String noteId = note.getId();
+        System.out.println(noteId);
+        System.out.println(userId);
+        databaseReference.child("notes").child(userId).child(noteId).removeValue()
+                .addOnSuccessListener(new OnSuccessListener<Void>() {
+                    @Override
+                    public void onSuccess(Void aVoid) {
+                        noteList.remove(note);
+                        noteAdapter.notifyDataSetChanged(); // Notify adapter about the change
+                        Toast.makeText(InsertNoteActivity.this, "Data dihapus", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Toast.makeText(InsertNoteActivity.this, "Gagal menghapus data", Toast.LENGTH_SHORT).show();
+                    }
+                });
+    }
+    private void retrieveNotesFromFirebase() {
+        DatabaseReference notesRef = databaseReference.child("notes").child(mAuth.getUid());
+
+        notesRef.addChildEventListener(new ChildEventListener() {
+            @Override
+            public void onChildAdded(@NonNull DataSnapshot snapshot, @Nullable String previousChildName) {
+                Note note = snapshot.getValue(Note.class);
+                noteList.add(note);
+                noteAdapter.notifyDataSetChanged();
+            }
+
+            @Override
+            public void onChildChanged(@NonNull DataSnapshot snapshot, @Nullable String previousChildName) {
+                Note updatedNote = snapshot.getValue(Note.class);
+                for (int i = 0; i < noteList.size(); i++) {
+                    if (Objects.equals(noteList.get(i).getId(), updatedNote.getId())) {
+                        noteList.set(i, updatedNote);
+                        break;
+                    }
+                }
+                noteAdapter.notifyDataSetChanged();
+            }
+
+            @Override
+            public void onChildRemoved(@NonNull DataSnapshot snapshot) {
+                String removedNoteId = snapshot.getKey();
+                for (int i = 0; i < noteList.size(); i++) {
+                    if (noteList.get(i).getId().equals(removedNoteId)) {
+                        noteList.remove(i);
+                        noteAdapter.notifyItemRemoved(i);
+                        break;
+                    }
+                }
+            }
+
+            @Override
+            public void onChildMoved(@NonNull DataSnapshot snapshot, @Nullable String previousChildName) {
+
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+
+            }
+        });
     }
     public void logOut(){
         mAuth.signOut();
@@ -61,7 +149,6 @@ public class InsertNoteActivity extends AppCompatActivity implements View.OnClic
         startActivity(intent);
         finish();
     }
-
     @Override
     protected void onStart() {
         super.onStart();
@@ -72,7 +159,6 @@ public class InsertNoteActivity extends AppCompatActivity implements View.OnClic
             tvUid.setText(currentUser.getUid());
         }
     }
-
     private boolean validateForm() {
         boolean result = true;
         if (TextUtils.isEmpty(etTitle.getText().toString())) {
@@ -89,27 +175,34 @@ public class InsertNoteActivity extends AppCompatActivity implements View.OnClic
         }
         return result;
     }
-
-    public void submitData(){
-        if (!validateForm()){
+    public void submitData() {
+        if (!validateForm()) {
             return;
         }
+
         String title = etTitle.getText().toString();
         String desc = etDesc.getText().toString();
-        Note baru = new Note(title, desc);
-        databaseReference.child("notes").child(mAuth.getUid()).push().setValue(baru).addOnSuccessListener(this, new OnSuccessListener<Void>() {
-            @Override
-            public void onSuccess(Void unused) {
-                Toast.makeText(InsertNoteActivity.this, "Add data", Toast.LENGTH_SHORT).show();
-            }
-        }).addOnFailureListener(this, new OnFailureListener() {
-            @Override
-            public void onFailure(@NonNull Exception e) {
-                Toast.makeText(InsertNoteActivity.this, "Failed to Add data", Toast.LENGTH_SHORT).show();
-            }
-        });
-    }
 
+        String id = databaseReference.child("notes").child(mAuth.getUid()).push().getKey();
+        Note baru = new Note(id, title, desc);
+
+        databaseReference.child("notes").child(mAuth.getUid()).child(id).setValue(baru)
+                .addOnSuccessListener(new OnSuccessListener<Void>() {
+                    @Override
+                    public void onSuccess(Void unused) {
+                        Toast.makeText(InsertNoteActivity.this, "Add data", Toast.LENGTH_SHORT).show();
+                        etTitle.setText("");
+                        etDesc.setText("");
+                    }
+                })
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Toast.makeText(InsertNoteActivity.this, "Failed to Add data", Toast.LENGTH_SHORT).show();
+                        e.printStackTrace(); // Print the error details
+                    }
+                });
+    }
     @Override
     public void onClick(View v) {
         switch (v.getId()){
@@ -120,5 +213,18 @@ public class InsertNoteActivity extends AppCompatActivity implements View.OnClic
                 submitData();
                 break;
         }
+    }
+    @Override
+    public void onDelete(Note note) {
+        deleteData(note);
+    }
+
+    @Override
+    public void onUpdate(Note note){
+        Intent intent = new Intent(InsertNoteActivity.this, UpdateNoteActivity.class);
+        intent.putExtra("note_id", note.getId());
+        intent.putExtra("note_title", note.getTitle());
+        intent.putExtra("note_desc", note.getDescription());
+        startActivity(intent);
     }
 }

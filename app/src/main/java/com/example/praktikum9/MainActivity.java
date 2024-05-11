@@ -95,7 +95,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     HashMap<String, Object> map = new HashMap<>();
                     map.put("id",user.getUid());
                     map.put("name", user.getDisplayName());
-                    map.put("profile", user.getPhotoUrl().toString());
 
                     database.getReference().child("users").child(user.getUid()).setValue(map);
 
