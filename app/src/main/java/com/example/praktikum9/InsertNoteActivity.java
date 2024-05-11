@@ -59,6 +59,7 @@ public class InsertNoteActivity extends AppCompatActivity implements View.OnClic
         Intent intent = new Intent(InsertNoteActivity.this, MainActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);//makesure user cant go back
         startActivity(intent);
+        finish();
     }
 
     @Override
@@ -108,7 +109,7 @@ public class InsertNoteActivity extends AppCompatActivity implements View.OnClic
             }
         });
     }
-    
+
     @Override
     public void onClick(View v) {
         switch (v.getId()){

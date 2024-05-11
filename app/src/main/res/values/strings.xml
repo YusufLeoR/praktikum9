@@ -11,4 +11,5 @@
     <string name="logout">Keluar</string>
     <string name="welcome">Selamat Datang,</string>
     <string name="add_note">Tambah Note</string>
+    <string name="default_web_client_id">1075271684195-e7j0nujstkkje24ro1qe24mq24gkn144.apps.googleusercontent.com</string>
 </resources>
